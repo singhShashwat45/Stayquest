@@ -1,9 +1,8 @@
-if(process.env.NODE_ENV != "production") {
+if (process.env.NODE_ENV !== "production") {
     require('dotenv').config();
 }
 
 const express = require("express");
-const app = express();
 const mongoose = require("mongoose");
 const path = require("path");
 const methodOverride = require("method-override");
@@ -20,21 +19,25 @@ const listingRouter = require("./routes/listing.js");
 const reviewRouter = require("./routes/review.js");
 const userRouter = require("./routes/user.js");
 
+const app = express();
 const dbUrl = process.env.ATLASDB_URL;
 
 main().then(() => {
-    console.log("connected to DB");
+    console.log("Connected to DB");
 }).catch((err) => {
-    console.log(err);
+    console.log("DB Connection Error:", err);
 });
 
 async function main() {
-    await mongoose.connect(dbUrl);
+    await mongoose.connect(dbUrl, {
+        useNewUrlParser: true,
+        useUnifiedTopology: true,
+    });
 }
 
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
-app.use(express.urlencoded({extended: true}));
+app.use(express.urlencoded({ extended: true }));
 app.use(methodOverride("_method"));
 app.engine('ejs', ejsMate);
 app.use(express.static(path.join(__dirname, "/public")));
@@ -47,9 +50,9 @@ const store = MongoStore.create({
     touchAfter: 24 * 3600,
 });
 
-store.on("error", () => {
+store.on("error", (err) => {
     console.log("ERROR IN MONGO SESSION STORE", err);
-})
+});
 
 const sessionOptions = {
     store,
@@ -62,10 +65,6 @@ const sessionOptions = {
         httpOnly: true,
     }
 };
-
-app.get("/", (req, res) => {
-    res.redirect("/listings");
-});
 
 app.use(session(sessionOptions));
 app.use(flash());
@@ -80,19 +79,13 @@ passport.deserializeUser(User.deserializeUser());
 app.use((req, res, next) => {
     res.locals.success = req.flash("success");
     res.locals.error = req.flash("error");
-    res.locals.currUser = req.user;
+    res.locals.currUser = req.user || null;
     next();
 });
 
-// app.get("/demouser", async (req, res) => {
-//     let fakeUser = new User({
-//         email: "student@gmail.com",
-//         username: "delta-student",
-//     });
-
-//     let registeredUser = await User.register(fakeUser, "helloworld");
-//     res.send(registeredUser);
-// })
+app.get("/", (req, res) => {
+    res.redirect("/listings");
+});
 
 app.use("/listings", listingRouter);
 app.use("/listings/:id/reviews", reviewRouter);
@@ -100,14 +93,15 @@ app.use("/", userRouter);
 
 app.all("*", (req, res, next) => {
     next(new ExpressError(404, "Page Not Found!"));
-})
-
-app.use((err, req, res, next) => {
-    let { statusCode=500, message="Something went wrong!" } = err;
-    res.status(statusCode).render("error.ejs", { err });
-    // res.status(statusCode).send(message);
 });
 
-app.listen(8080, () => {
-    console.log("server is listening to port 8080");
+app.use((err, req, res, next) => {
+    let { statusCode = 500, message = "Something went wrong!" } = err;
+    res.status(statusCode).render("error.ejs", { err });
+    // Alternatively, you could use:
+    // res.status(statusCode).send(message);
+});
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, () => {
+    console.log("Server is listening on port 8080");
 });
